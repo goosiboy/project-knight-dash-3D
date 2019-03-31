@@ -7,7 +7,9 @@ using UnityEngine;
 /// </summary>
 public class Movement : MonoBehaviour {
 
-    public float force = 50000.0f;
+    public float jumpForce = 450.0f;
+    public float fallMultiplier = 2.0f;
+    public float maxThrust = 18000.0f;
 
     private float thrust;
     private float radians;
@@ -30,6 +32,9 @@ public class Movement : MonoBehaviour {
     public static readonly bool PLAYER_JUMPING = true;
     public static readonly bool PLAYER_NOT_JUMPING = false;
 
+    public static readonly string RIGHT = "right";
+    public static readonly string LEFT = "left";
+
     /// <summary>
     ///     Class name
     /// </summary>
@@ -51,36 +56,22 @@ public class Movement : MonoBehaviour {
 
     // Update is called once per frame
     void FixedUpdate() {
-        this.eventController();
-    }
-
-    void eventController() {
         if (Input.GetButtonDown("Fire1")) {
-            this.mouseDownConfig();
+            Player.getMouseDown().setX(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).x);
+            Player.getMouseDown().setY(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).y);
         }
         if (Input.GetButtonUp("Fire1")) {
-            this.mouseUpConfig();
-            this.playerAttackController();
+            Player.getMouseUp().setX(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).x);
+            Player.getMouseUp().setY(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).y);
+            this.playerJumpController();
         }
 
-        if (Player.getPlayerState().getIsJumping().Equals(PLAYER_NOT_JUMPING)) {
-            if (Input.GetKey("right")) {
-                this.moveToRight();
-            } else if (Input.GetKey("left")) {
-                this.moveToLeft();
-            }
+        // Makes the player fall faster after reaching the maximum altitude
+        if (true == this.getPlayerJumpState()) {
+            if (rb.velocity.y < 0.0f) {
+                rb.velocity += Vector3.up * Physics.gravity.y * (this.fallMultiplier - 1) * Time.deltaTime;
+            } 
         }
-
-    }
-
-    public void mouseDownConfig() {
-        Player.getMouseDown().setX(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).x);
-        Player.getMouseDown().setY(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).y);
-    }
-
-    public void mouseUpConfig() {
-        Player.getMouseUp().setX(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).x);
-        Player.getMouseUp().setY(Camera.main.ScreenToWorldPoint((Vector3)Input.mousePosition).y);
     }
 
     private float handleAngle() {
@@ -93,43 +84,39 @@ public class Movement : MonoBehaviour {
         return angle;
     }
 
-    /*private float handleDistance() {
+    private float handleDistance() {
         dist = (float)System.Math.Sqrt(
-            System.Math.Pow((this.mouseDown.getX() - this.mouseUp.getX()), 2) + 
-            System.Math.Pow((this.mouseDown.getY() - this.mouseUp.getY()), 2));
-        thrust = this.force * dist;
-        return this.force;
-    }*/
+            System.Math.Pow((Player.getMouseDown().getX() - Player.getMouseUp().getX()), 2) + 
+            System.Math.Pow((Player.getMouseDown().getY() - Player.getMouseUp().getY()), 2));
+        thrust = this.jumpForce * dist;
 
-    void playerAttackController() {
-        this.executeJump(this.handleAngle(), this.getForce());
+        if(this.thrust > this.maxThrust) {
+            this.thrust = this.maxThrust;
+        }
+
+        Debug.Log("JUMP FORCE: " + this.thrust);
+
+        return this.thrust;
     }
 
-    private void executeJump(float angle, float force) {
-        if (force > 0) {
-            this.gravityController(ENABLE_GRAVITY);
+    void playerJumpController() {
+        this.executeJump(this.handleAngle(), this.handleDistance());
+    }
+
+    private void executeJump(float angle, float thrust) {
+        if (this.jumpForce > 0) {          
             this.playerStateController(true, true);
             Vector3 dir = Quaternion.AngleAxis(angle, Vector3.forward) * Vector3.right;
-            rb.AddForce(dir * force);
+            rb.AddForce(dir * thrust);
             Debug.Log("Player is jumping");
         }      
     }
 
     private void OnCollisionEnter(Collision collision) {
         if (collision.gameObject.name == "Floor") {
-            this.gravityController(ENABLE_GRAVITY);
             this.playerStateController(false, false);
             Debug.Log("Player has landed");
         }
-    }
-
-    private void gravityController(bool useGravity) {
-        rb.useGravity = useGravity;
-    }
-
-    private void killVeloctiy() {
-        rb.velocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
     }
 
     void moveToRight() {
@@ -160,6 +147,14 @@ public class Movement : MonoBehaviour {
         Player.getPlayerState().getDebugString();
     }
 
+    bool? getPlayerJumpState() {
+        return Player.getPlayerState().getIsJumping();
+    }
+
+    bool? getPlayerIsActiveState() {
+        return Player.getPlayerState().getIsActive();
+    }
+
     //GETTERS AND SETTERS
     public float getSpeed() {
         return this.speed;
@@ -182,11 +177,11 @@ public class Movement : MonoBehaviour {
     }
 
     public float getForce() {
-        return this.force;
+        return this.jumpForce;
     }
 
     public void setForce(float force) {
-        this.force = force;
+        this.jumpForce = force;
     }
 
     public void setDist(float dist) {
